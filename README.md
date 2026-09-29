@@ -116,7 +116,7 @@ qwenpaw plugin install https://example.com/code-review-copilot-1.0.0.zip
 ## 开发 / Development
 
 ```bash
-# 运行全部测试（73 个，无需安装 QwenPaw）
+# 运行全部测试（98 个，无需安装 QwenPaw）
 python -m unittest discover -s tests -t .
 ```
 
@@ -126,6 +126,7 @@ python -m unittest discover -s tests -t .
 * git 安全白名单（写操作必须被拒绝）
 * 插件注册（工具数量、`tool_type`、异步签名、命令注册）
 * 真实临时仓库的端到端评审
+* 发版脚本（UTF-8 编码、BOM/乱码检测、版本一致性、CLI 行为）
 
 ### 发版 / Releasing
 
