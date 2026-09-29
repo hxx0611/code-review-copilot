@@ -1,0 +1,88 @@
+{
+  "id": "code-review-copilot",
+  "name": "Code Review Copilot",
+  "description": "Read-only code review: static rules for secrets, dangerous calls and swallowed errors, plus a context bundle for AI semantic review.",
+  "description_i18n": {
+    "zh-CN": "只读代码评审：静态规则检测密钥泄露、危险调用与被吞掉的异常，并提供上下文供 AI 做语义评审。",
+    "en-US": "Read-only code review: static rules for secrets, dangerous calls and swallowed errors, plus a context bundle for AI semantic review."
+  },
+  "version": "1.0.0",
+  "type": "general",
+  "author": "hxx0611",
+  "entry": {
+    "backend": "plugin.py"
+  },
+  "dependencies": [],
+  "qwenpaw_version": {
+    "min": "2.0.0"
+  },
+  "pack_exclude": [
+    "tests",
+    "__pycache__",
+    "*.pyc"
+  ],
+  "meta": {
+    "tools": [
+      {
+        "name": "review_git_diff",
+        "description": "Review uncommitted changes with static rules",
+        "icon": "🔍",
+        "requires_config": false,
+        "config_fields": [
+          {
+            "name": "repo_dir",
+            "label": "Repository path (optional)",
+            "type": "text",
+            "required": false,
+            "placeholder": "Leave empty to use the agent workspace",
+            "help": "Absolute path to the git repository to review."
+          },
+          {
+            "name": "ignore",
+            "label": "Ignore patterns (optional)",
+            "type": "text",
+            "required": false,
+            "placeholder": "^vendor/,^third_party/",
+            "help": "Comma-separated regexes for paths to skip."
+          }
+        ]
+      },
+      {
+        "name": "review_rev_range",
+        "description": "Review a commit or branch range with static rules",
+        "icon": "🔎",
+        "requires_config": false,
+        "config_fields": [
+          {
+            "name": "rev_range",
+            "label": "Default revision range",
+            "type": "text",
+            "required": false,
+            "placeholder": "HEAD~1..HEAD",
+            "help": "Git revision range, e.g. main..HEAD."
+          }
+        ]
+      },
+      {
+        "name": "review_context",
+        "description": "Fetch changed lines for AI semantic review",
+        "icon": "🧠",
+        "requires_config": false,
+        "config_fields": [
+          {
+            "name": "max_files",
+            "label": "Max files to include",
+            "type": "number",
+            "required": false,
+            "placeholder": "30",
+            "min": 1,
+            "max": 200,
+            "help": "How many changed files to include in the AI review context."
+          }
+        ]
+      }
+    ],
+    "read_only": true,
+    "requires_git": true
+  }
+}
