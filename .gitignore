@@ -1,7 +1,10 @@
-﻿__pycache__/
+__pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
 venv/
 .DS_Store
+
+# Release artefacts (built by the release script, uploaded as assets)
+dist/
 *.zip

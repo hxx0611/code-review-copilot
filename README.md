@@ -127,6 +127,20 @@ python -m unittest discover -s tests -t .
 * 插件注册（工具数量、`tool_type`、异步签名、命令注册）
 * 真实临时仓库的端到端评审
 
+### 发版 / Releasing
+
+发版流程见 [`.github/RELEASE.md`](.github/RELEASE.md)。请使用
+`.github/release.py` 发布，**不要**用 PowerShell 的 `Invoke-RestMethod`
+直接提交 release body —— 它会把中文变成 `?`（详见该文档）。
+
+```bash
+# 先校验（不触碰 GitHub）
+python .github/release.py --version 1.0.0 --check
+
+# 正式发布并上传 ZIP
+python .github/release.py --version 1.0.0 --zip dist/code-review-copilot-1.0.0.zip
+```
+
 ### 扩展规则
 
 编辑 `rules.py` 的 `RULES` 元组：
