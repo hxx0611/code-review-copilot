@@ -61,7 +61,7 @@ def api(method: str, url: str, token: str, payload: dict | None = None):
     }
     if payload is not None:
         # The critical line: JSON must be UTF-8 bytes, not locale-encoded.
-        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        data = encode_body(payload)
         headers["Content-Type"] = "application/json; charset=utf-8"
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
@@ -95,8 +95,21 @@ def upload_asset(upload_url: str, token: str, zip_path: Path) -> dict:
         raise SystemExit(f"Asset upload failed {exc.code}:\n{detail}")
 
 
-def load_notes(version: str) -> str:
-    path = NOTES_DIR / f"v{version}.md"
+def load_notes(version: str, notes_dir: Path | None = None) -> str:
+    """Read release notes for *version*.
+
+    Args:
+        version: Version without the leading ``v``.
+        notes_dir: Override for the notes directory (used by tests).
+
+    Returns:
+        The notes text.
+
+    Raises:
+        SystemExit: When the notes file is missing.
+    """
+    directory = notes_dir or NOTES_DIR
+    path = directory / f"v{version}.md"
     if not path.is_file():
         raise SystemExit(
             f"Release notes not found: {path}\n"
@@ -105,27 +118,36 @@ def load_notes(version: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def check(version: str, notes: str, repo: str, token: str | None) -> None:
-    """Validate everything that has broken before, before publishing."""
+def collect_problems(
+    version: str,
+    notes: str,
+    *,
+    notes_path: Path | None = None,
+    manifest_path: Path | None = None,
+    expected_author: str = "hxx0611",
+    expected_id: str = "code-review-copilot",
+) -> list[str]:
+    """Return a list of validation problems (empty means all good).
+
+    Kept side-effect free so the rules can be unit-tested directly;
+    :func:`check` handles the printing and exit code.
+    """
     problems: list[str] = []
-    notes_path = NOTES_DIR / f"v{version}.md"
+    path = notes_path or (NOTES_DIR / f"v{version}.md")
+    man_path = manifest_path or MANIFEST
 
     # --- notes encoding -------------------------------------------------
-    raw = notes_path.read_bytes()
-    if raw.startswith(b"\xef\xbb\xbf"):
-        problems.append(
-            f"{notes_path.name} starts with a UTF-8 BOM; re-save without BOM.",
-        )
-    if not CJK_RE.search(notes):
-        print(
-            "  note: notes contain no CJK characters "
-            "(fine for English releases)",
-        )
+    if path.is_file():
+        raw = path.read_bytes()
+        if raw.startswith(b"\xef\xbb\xbf"):
+            problems.append(
+                f"{path.name} starts with a UTF-8 BOM; re-save without BOM.",
+            )
     if "????" in notes:
         problems.append("Notes already contain '????' — encoding is broken.")
 
     # --- manifest -------------------------------------------------------
-    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    manifest = json.loads(man_path.read_text(encoding="utf-8"))
     mver = manifest.get("version", "")
     if not SEMVER_RE.match(mver):
         problems.append(f"plugin.json version {mver!r} is not semver.")
@@ -133,11 +155,15 @@ def check(version: str, notes: str, repo: str, token: str | None) -> None:
         problems.append(
             f"plugin.json version is {mver!r} but --version is {version!r}.",
         )
-    if manifest.get("id") != "code-review-copilot":
-        problems.append("plugin.json id changed unexpectedly.")
-    if manifest.get("author") != "hxx0611":
+    if manifest.get("id") != expected_id:
         problems.append(
-            f"plugin.json author is {manifest.get('author')!r}, expected 'hxx0611'.",
+            f"plugin.json id is {manifest.get('id')!r}, "
+            f"expected {expected_id!r}.",
+        )
+    if manifest.get("author") != expected_author:
+        problems.append(
+            f"plugin.json author is {manifest.get('author')!r}, "
+            f"expected {expected_author!r}.",
         )
 
     # --- round-trip through JSON, the step that failed before -----------
@@ -146,11 +172,58 @@ def check(version: str, notes: str, repo: str, token: str | None) -> None:
     if decoded != notes:
         problems.append("Notes do not survive a UTF-8 JSON round-trip.")
 
-    # --- report ---------------------------------------------------------
+    return problems
+
+
+def encode_body(payload: dict) -> bytes:
+    """Serialise *payload* as UTF-8 JSON bytes.
+
+    This is the single most important line in the file: PowerShell's
+    ``Invoke-RestMethod`` encoded the body with the local ANSI code page
+    and turned every Chinese character into ``?``. Python must always
+    hand raw UTF-8 bytes to the HTTP layer.
+    """
+    return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+
+def check(
+    version: str,
+    notes: str,
+    repo: str,
+    token: str | None,
+    *,
+    notes_path: Path | None = None,
+    manifest_path: Path | None = None,
+) -> None:
+    """Validate everything that has broken before, then print a report.
+
+    Raises:
+        SystemExit: With code 1 when any problem is found.
+    """
+    path = notes_path or (NOTES_DIR / f"v{version}.md")
+    problems = collect_problems(
+        version, notes, notes_path=path, manifest_path=manifest_path,
+    )
+
+    encoded = encode_body({"body": notes})
+    cjk = bool(CJK_RE.search(notes))
+
+    if not cjk:
+        print(
+            "  note: notes contain no CJK characters "
+            "(fine for English releases)",
+        )
+
     print(f"  repo        : {repo}")
+    try:
+        mver = json.loads(
+            (manifest_path or MANIFEST).read_text(encoding="utf-8"),
+        ).get("version", "?")
+    except Exception:  # pragma: no cover - manifest already validated
+        mver = "?"
     print(f"  version     : {version} (manifest: {mver})")
-    print(f"  notes file  : {notes_path.name} ({len(notes)} chars)")
-    print(f"  notes CJK   : {'yes' if CJK_RE.search(notes) else 'no'}")
+    print(f"  notes file  : {path.name} ({len(notes)} chars)")
+    print(f"  notes CJK   : {'yes' if cjk else 'no'}")
     print(f"  utf-8 bytes : {len(encoded)}")
     print(f"  token       : {'present' if token else 'MISSING'}")
 
